@@ -1,0 +1,5 @@
+#!c:\users\jasiu\pycharmprojects\mylabproject\venv\scripts\python.exe
+import sys,logging
+from ttfquery import ttfmetadata
+logging.basicConfig( level = logging.INFO )
+sys.exit( ttfmetadata.main())
