@@ -1,85 +1,56 @@
-from vpython import *
-from random import uniform
 import numpy as np
-import matplotlib as mp
-# inicjowanie atomow
-scene.caption ="""by obracać kamerą, przeciągnij trzymając prawy przycisk myszki lub Ctrl-drag.
-by powiększyć, przeciągnij środkowym myszki albo użyj scrolla myszki. ."""
+#  Zmiana narazie wstęp czyli rozpisanie możliwości ruchu atomów i ich interakcji między sobą i otoczeniem
 
-side = 4.0
-thk = 0.3
-s2 = 2*side - thk
-s3 = 2*side + thk
-# tworzenie pudełka
-wallR = box (pos=vector( side, 0, 0), size=vector(thk, s2, s3),  color = color.red)
-wallL = box (pos=vector(-side, 0, 0), size=vector(thk, s2, s3),  color = color.red)
-wallU = box (pos=vector(0, -side, 0), size=vector(s3, thk, s3),  color = color.blue)
-wallD = box (pos=vector(0,  side, 0), size=vector(s3, thk, s3),  color = color.blue)
-wallB = box(pos=vector(0, 0, -side), size=vector(s2, s2, thk), color = color.gray(0.7))
+class Atomy:
+    def __init__(self, pozycja, predkosc, masa, promien):
+        self.pozycja = np.array(pozycja)  # Ostatnia pozycja atomu
+        self.predkosc = np.array(predkosc)  # Ostatnia prędkość atomu
+        self.masa = masa  # masa atmou
+        self.promien = promien  # promień atomu
+        self.v_w_czasie = (np.copy(self.predkosc))  # Zapisywanie wszystkich prędkości oraz pozycji w czasie
+        self.p_w_czasie = (np.copy(self.pozycja))
+        self.v_w_czasie_w = (np.linalg.norm(np.copy(self.predkosc)))
 
-# tworzenie atomów
-no_particles=10
-ball_radius=0.2
-maxpos=side-thk/2-ball_radius
-maxv=1
-ball_list=[]
-dt = 0.3
+    def Ruch_atomu(self, krok):
+        self.pozycja += krok * self.predkosc  # obliczanie następnego "kroku" atomu
+        self.v_w_czasie.append(np.copy(self.predkosc))
+        self.p_w_czasie.append(np.copy(self.pozycja))
+        self.v_w_czasie_w.append(np.linalg.norm(np.copy(self.predkosc)))
 
+    def Ruch_po_zderzeniu(self, atom, krok):  # obliczamy ruch po zderzeniu
+        m1, m2 = self.masa, atom.masa
+        r1, r2 = self.promien, atom.promien
+        v1, v2 = self.predkosc, atom.predkosc
+        p1, p2 = self.pozycja, atom.pozycja
+        di = p2 - p1
+        norm = np.linalg.norm(di)
+        if norm - (r1 + r2) * 1.1 < krok * abs(np.dot(v1 - v2, di)) / norm:
+            self.predkosc = v1 - 2 * m2 / (m1 + m2) * np.dot(v1 - v2, di) / (np.linalg.norm(di) ** 2.) * di
+            atom.predkosc = v2 - 2 * m1 / (m1 + m2) * np.dot(v2 - v1, (-di)) / (np.linalg.norm(di) ** 2.) * (-di)
 
-for i in range(no_particles):
-    ball=sphere(color=color.green,radius=ball_radius,retain=100)
-    ball.pos=maxpos*vector(uniform(-1,1),uniform(-1,1),uniform(-1,1))
-    ball.velocity=maxv*vector(uniform(-1,1),uniform(-1,1),uniform(-1,1))
-    ball_list.append(ball)
-    ball.mass = 1.0
-    ball.p = vector(-0.15, -0.23, +0.27)
-# pętla sprawdzająca
-while (1==1):
-    rate(100)
-    timestep=0.1
-    for ball in ball_list:
-        ball.pos = ball.pos + ball.velocity*timestep
-            #prawa ściana
-        if ball.pos.x > maxpos:
-            ball.velocity.x = -ball.velocity.x  # odbijaj prędkość
-            ball.pos.x = 2 * maxpos - ball.pos.x  # odbijaj pozycje
-            # lewa ściana
-        if ball.pos.x < -maxpos:
-            ball.velocity.x = -ball.velocity.x
-            ball.pos.x = -2 * maxpos - ball.pos.x
-            # sufit
-        if ball.pos.y> maxpos:
-            ball.velocity.y = -ball.velocity.y
-            ball.pos.y = 2 * maxpos - ball.pos.y
-            # podłoże wall
-        if ball.pos.y < -maxpos:
-            ball.velocity.y = -ball.velocity.y
-            ball.pos.y = -2 * maxpos - ball.pos.y
-            # przednia ściana
-        if ball.pos.z > maxpos:
-            ball.velocity.z = -ball.velocity.z
-            ball.pos.z = 2 * maxpos - ball.pos.z
-            # tylna ściana
-        if ball.pos.z < -maxpos:
-            ball.velocity.z = -ball.velocity.z
-            ball.pos.z = -2 * maxpos - ball.pos.z
- # sprawdź kolizje ze ścianami
-# Detekcja zderzeń atomów
- # zapętlanie przez wszystkie pary
-    for i in range(no_particles):
-        for j in range(i+1,no_particles):
-            distance=mag(ball_list[i].pos-ball_list[j].pos)
-            # sprawdzanie kolizji
-            if distance<(ball_list[i].radius+ball_list[j].radius):
-                #unit vector in collision direction
-                    direction=norm(ball_list[j].pos-ball_list[i].pos)
-                    vi=dot(ball_list[i].velocity,direction)
-                    vj=dot(ball_list[j].velocity,direction)
-                    # prędkość zderzenia
-                    exchange = vj - vi
-                    # wymiana momentum
-                    ball_list[i].velocity = ball_list[i].velocity + exchange * direction
-                    ball_list[j].velocity = ball_list[j].velocity - exchange * direction
-                    overlap = 2 * ball_radius - distance
-                    ball_list[i].pos = ball_list[i].pos - overlap * direction
-                    ball_list[j].pos = ball_list[j].pos + overlap * direction
+    def Odbicie_od_sciany(self, krok, rozmiar):
+        r = self.promien
+        v = self.predkosc
+        p = self.pozycja
+        scianax = krok * abs(np.dot(v, np.array([1, 0])))
+        scianay = krok * abs(np.dot(v, np.array([0, 1])))
+        if abs(p[0]) - r < scianax or abs(rozmiar - p[0]) - r < scianax:
+            self.predkosc[0] *= -1
+        if abs(p[1]) - r < scianay or abs(rozmiar - p[1]) - r < scianay:
+            self.predkosc[1] *= -1
+
+def roz1(lista, krok, rozmiar): # lista to liczba atomów w liscie którą stworze potem
+    for atom1 in lista:
+        atom1.Odbicie_od_sciany(krok, rozmiar)
+        for atom2 in lista:
+            if atom1 is not atom2:
+                atom1.Ruch_po_zderzeniu(atom2, krok)
+
+def roz2(lista, krok):
+    for atom in lista:
+        atom.Ruch_atomu(krok)
+
+def Rozwiazanie(lista, krok, rozmiar):
+    lista = roz1(lista, krok, rozmiar)
+    lista = roz2(lista, krok)
+    return lista
