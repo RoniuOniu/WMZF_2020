@@ -1,56 +1,124 @@
 import numpy as np
-#  Zmiana narazie wstęp czyli rozpisanie możliwości ruchu atomów i ich interakcji między sobą i otoczeniem
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider
 
 class Atomy:
-    def __init__(self, pozycja, predkosc, masa, promien):
-        self.pozycja = np.array(pozycja)  # Ostatnia pozycja atomu
-        self.predkosc = np.array(predkosc)  # Ostatnia prędkość atomu
-        self.masa = masa  # masa atmou
-        self.promien = promien  # promień atomu
-        self.v_w_czasie = (np.copy(self.predkosc))  # Zapisywanie wszystkich prędkości oraz pozycji w czasie
-        self.p_w_czasie = (np.copy(self.pozycja))
-        self.v_w_czasie_w = (np.linalg.norm(np.copy(self.predkosc)))
+    def __init__(self, masa, promien, pozycja, predkosc):
+        self.masa = masa
+        self.promien = promien
+        self.pozycja = np.array(pozycja)
+        self.predkosc = np.array(predkosc)
+        self.pozycja_w_cz = [np.copy(self.pozycja)]
+        self.predkosc_w_cz = [np.copy(self.predkosc)]
+        self.predkosc_w_cz_w = [np.linalg.norm(np.copy(self.predkosc))]
 
-    def Ruch_atomu(self, krok):
-        self.pozycja += krok * self.predkosc  # obliczanie następnego "kroku" atomu
-        self.v_w_czasie.append(np.copy(self.predkosc))
-        self.p_w_czasie.append(np.copy(self.pozycja))
-        self.v_w_czasie_w.append(np.linalg.norm(np.copy(self.predkosc)))
+    def Ruch(self, krok):
+        self.pozycja += krok * self.predkosc
+        self.pozycja_w_cz.append(np.copy(self.pozycja))
+        self.predkosc_w_cz.append(np.copy(self.predkosc))
+        self.predkosc_w_cz_w.append(np.linalg.norm(np.copy(self.predkosc)))
 
-    def Ruch_po_zderzeniu(self, atom, krok):  # obliczamy ruch po zderzeniu
-        m1, m2 = self.masa, atom.masa
-        r1, r2 = self.promien, atom.promien
-        v1, v2 = self.predkosc, atom.predkosc
-        p1, p2 = self.pozycja, atom.pozycja
+    def Sprawdznie_kolizji(self, czastka):
+        r1, r2 = self.promien, czastka.promien
+        p1, p2 = self.pozycja, czastka.pozycja
+        di = p2 - p1
+        norm = np.linalg.norm(di)
+        if norm - (r1 + r2) * 1.1 < 0:
+            return True
+        else:
+            return False
+
+    def Kolizja(self, czastka, krok):
+        m1, m2 = self.masa, czastka.masa
+        r1, r2 = self.promien, czastka.promien
+        v1, v2 = self.predkosc, czastka.predkosc
+        p1, p2 = self.pozycja, czastka.pozycja
         di = p2 - p1
         norm = np.linalg.norm(di)
         if norm - (r1 + r2) * 1.1 < krok * abs(np.dot(v1 - v2, di)) / norm:
-            self.predkosc = v1 - 2 * m2 / (m1 + m2) * np.dot(v1 - v2, di) / (np.linalg.norm(di) ** 2.) * di
-            atom.predkosc = v2 - 2 * m1 / (m1 + m2) * np.dot(v2 - v1, (-di)) / (np.linalg.norm(di) ** 2.) * (-di)
+            self.predkosc = v1 - 2. * m2 / (m1 + m2) * np.dot(v1 - v2, di) / (np.linalg.norm(di) ** 2.) * di
+            czastka.predkosc = v2 - 2. * m1 / (m2 + m1) * np.dot(v2 - v1, (-di)) / (np.linalg.norm(di) ** 2.) * (-di)
 
     def Odbicie_od_sciany(self, krok, rozmiar):
-        r = self.promien
-        v = self.predkosc
-        p = self.pozycja
-        scianax = krok * abs(np.dot(v, np.array([1, 0])))
-        scianay = krok * abs(np.dot(v, np.array([0, 1])))
+        r, v, p = self.promien, self.predkosc, self.pozycja
+        scianax = krok * abs(np.dot(v, np.array([1., 0.])))
+        scianay = krok * abs(np.dot(v, np.array([0., 1.])))
         if abs(p[0]) - r < scianax or abs(rozmiar - p[0]) - r < scianax:
             self.predkosc[0] *= -1
         if abs(p[1]) - r < scianay or abs(rozmiar - p[1]) - r < scianay:
-            self.predkosc[1] *= -1
-
-def roz1(lista, krok, rozmiar): # lista to liczba atomów w liscie którą stworze potem
-    for atom1 in lista:
-        atom1.Odbicie_od_sciany(krok, rozmiar)
-        for atom2 in lista:
-            if atom1 is not atom2:
-                atom1.Ruch_po_zderzeniu(atom2, krok)
-
-def roz2(lista, krok):
-    for atom in lista:
-        atom.Ruch_atomu(krok)
+            self.predkosc[1] *= -1.
 
 def Rozwiazanie(lista, krok, rozmiar):
-    lista = roz1(lista, krok, rozmiar)
-    lista = roz2(lista, krok)
+    for i in range(len(lista)):
+        lista[i].Odbicie_od_sciany(krok, rozmiar)
+        for j in range(i + 1, len(lista)):
+            lista[i].Kolizja(lista[j], krok)
+    for czastka in lista:
+        czastka.Ruch(krok)
+
+
+
+def Random_list(N, promien, masa, pojemnik):
+    lista = []
+    for i in range(N):
+        prędkość_p = np.random.rand(1) * 6
+        prędkość_k = np.random.rand(1) * 2 * np.pi
+        v = np.append(prędkość_p * np.cos(prędkość_k), prędkość_p * np.sin(prędkość_k))
+        zderzenie = True
+        while (zderzenie == True):
+            zderzenie = False
+            pos = promien + np.random.rand(2) * (pojemnik - 2 * promien)
+            nowy_a = Atomy(masa, promien, pos, v)
+            for j in range(len(lista)):
+                zderzenie = nowy_a.Sprawdznie_kolizji(lista[j])
+                if zderzenie == True:
+                    break
+
+        lista.append(nowy_a)
     return lista
+
+
+liczba_atomow = 150
+pojemnik = 400
+czas = 30
+liczba_krokow = 150
+krok_czasu = czas / liczba_krokow
+lista = Random_list(liczba_atomow, promien=4, masa=3, pojemnik=pojemnik)
+for i in range(liczba_krokow):
+    Rozwiazanie(lista, krok_czasu, pojemnik)
+
+
+fig = plt.figure(figsize=(18, 8))
+ax = fig.add_subplot(1, 2, 2)
+hist = fig.add_subplot(1, 2, 1)
+plt.subplots_adjust(bottom=0.2, left=0.1)
+ax.xaxis.set_visible(False)
+ax.yaxis.set_visible(False)
+ax.set_xlim([0, pojemnik])
+ax.set_ylim([0, pojemnik])
+kolo = [None] * liczba_atomow
+for i in range(liczba_atomow):
+    kolo[i] = plt.Circle((lista[i].pozycja_w_cz[0][0], lista[i].pozycja_w_cz[0][1]), lista[i].promien,
+                         ec="red", lw=0.5,zorder=20)
+    ax.add_patch(kolo[i])
+predkosc_m = [lista[i].predkosc_w_cz_w[0] for i in range(len(lista))]
+hist.hist(predkosc_m, bins=20)
+hist.set_xlabel("Prędkość")
+hist.set_ylabel("liczba atomow")
+suwak_ax = plt.axes([0.1, 0.05, 0.8, 0.05])
+suwak = Slider(suwak_ax, 't', 0, czas,valinit=0)
+
+
+def update(czas):
+    i = int(np.rint(czas / krok_czasu))
+    for j in range(liczba_atomow):
+        kolo[j].center = lista[j].pozycja_w_cz[i][0], lista[j].pozycja_w_cz[i][1]
+    hist.clear()
+    predkosc_m = [lista[j].predkosc_w_cz_w[i] for j in range(len(lista))]
+    hist.hist(predkosc_m, bins=20)
+    hist.set_xlabel("Prędkość")
+    hist.set_ylabel("Liczba atomow")
+
+suwak.on_changed(update)
+plt.show()
+
